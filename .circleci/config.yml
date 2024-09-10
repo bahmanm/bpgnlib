@@ -24,7 +24,7 @@ jobs:
 
       - restore_cache:
           keys:
-            - dependencies-{{ checksum "bpgnlib/build.gradle" }}
+            - dependencies-{{ checksum "lib/build.gradle" }}
             - dependencies-
 
       - run:
@@ -35,7 +35,7 @@ jobs:
       - save_cache:
           paths:
             - ~/.gradle
-          key: dependencies-{{ checksum "bpgnlib/build.gradle" }}
+          key: dependencies-{{ checksum "lib/build.gradle" }}
 
       - run:
           name: Run the tests
