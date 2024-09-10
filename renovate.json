@@ -1,0 +1,16 @@
+{
+  "extends": ["config:base"],
+  "labels": ["renovate"],
+  "packageRules": [
+    {
+      "matchPackagePatterns": ["*"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "All non-major dependencies"
+    },
+    {
+      "matchPackagePatterns": ["*"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "All major dependencies"
+    }
+  ]
+}
