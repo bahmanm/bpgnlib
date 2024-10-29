@@ -4,6 +4,7 @@ import groovy.transform.Canonical
 
 @Canonical
 class Tag {
+
   String key
   String value
 }

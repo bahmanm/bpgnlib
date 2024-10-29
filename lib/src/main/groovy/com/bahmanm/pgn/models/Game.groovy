@@ -8,4 +8,5 @@ class Game {
   List<Tag> tags
   Integer startingMoveNumber
   Ply firstPly
+  String result
 }
