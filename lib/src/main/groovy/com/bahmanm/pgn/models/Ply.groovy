@@ -13,4 +13,9 @@ class Ply {
   String commentBefore
   String commentAfter
   String nag
+  
+  @Override
+  String toString() {
+    "${commentBefore} ${san} ${commentAfter}"
+  }
 }

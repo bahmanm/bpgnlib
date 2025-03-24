@@ -137,6 +137,28 @@ class DeserialiserSpec extends Specification {
         game.startingMoveNumber == 1
     }
 
+    def "should parse draw result"() {
+        given:
+        def pgn = '''
+[Event "Test Game"]
+[Site "Home"]
+[Date "2024.01.25"]
+[Round "-"]
+[White "Player A"]
+[Black "Player B"]
+[Result "1/2-1/2"]
+
+1. e4 c5 2. Nf3 d6 1/2-1/2
+    '''
+        def deserialiser = new Deserialiser()
+
+        when:
+        def game = deserialiser.deserialise(pgn)
+
+        then:
+        game.result == "1/2-1/2"
+    }    
+
     def "test game with comments"() {
         setup:
         String pgn = """
