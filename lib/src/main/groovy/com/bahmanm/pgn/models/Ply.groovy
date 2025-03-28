@@ -6,13 +6,13 @@ import groovy.transform.Canonical
 class Ply {
 
   String san
-  Ply next
-  Ply prev
-  List<Ply> variations
+  Ply next = null
+  Ply prev = null
+  List<Ply> variations = []
 
-  String commentBefore
-  String commentAfter
-  String nag
+  String commentBefore = ''
+  String commentAfter = ''
+  String nag = ''
   
   @Override
   String toString() {

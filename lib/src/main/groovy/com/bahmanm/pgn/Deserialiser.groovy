@@ -32,7 +32,7 @@ class Deserialiser {
       tokenizer.wordChars('!'.codePointAt(0), '~'.codePointAt(0));
       tokenizer.whitespaceChars('\n'.codePointAt(0), ' '.codePointAt(0));
       tokenizer.quoteChar('"'.codePointAt(0));
-      tokenizer.commentChar('{'.codePointAt(0));
+      //tokenizer.commentChar('{'.codePointAt(0));
       tokenizer.ordinaryChar('['.codePointAt(0));
       tokenizer.ordinaryChar(']'.codePointAt(0));
       tokenizer.ordinaryChar('('.codePointAt(0));
@@ -44,7 +44,7 @@ class Deserialiser {
       Integer startingMoveNumber = parseStartingMoveNumber(tags, tokenizer);
       String moveText = parseMoveText(tokenizer); // Get move text as a string
       String result = parseResult(moveText);
-      Ply firstPly = parseMoveTextToPlies(moveText); // *Process the move text string*
+      Ply firstPly = parseMoveTextToPlies(moveText, tokenizer); // *Process the move text string*
       return new Game(tags, startingMoveNumber, firstPly, result);
     } catch (IOException e) {
       log.error("Error during deserialization: ${e.message}", e);
@@ -159,94 +159,127 @@ class Deserialiser {
       }
       else if (token == StreamTokenizer.TT_WORD){
         moveText.append(word).append(" ");
+      } else if (word.find('^{')) {
+        StringBuilder comment = new StringBuilder();
+        comment.append(word.replaceAll('\\{', ''))
+        while ((token = tokenizer.nextToken()) != StreamTokenizer.TT_EOF && token != '}'.codePointAt(0)) {
+          if (token == StreamTokenizer.TT_EOL) {
+            comment.append(" ");
+          } else {
+            comment.append(tokenizer.sval);
+          }
+        }
+        moveText.append(" { ").append(comment.toString().trim()).append(" } ");
       }
     }
     return moveText.toString().trim();
   }
 
-  private Ply parseMoveTextToPlies(String moveText) {
+  private Ply parseMoveTextToPlies(String moveText, StreamTokenizer tokenizer) {
+    if (moveText.find('^\\s*\\(.+\\)\\s*$')) {
+      moveText = moveText.substring(1, moveText.size()-1)
+    }
     Ply firstPly = null;
     Ply prevPly = null;
-    List<String> moves = new ArrayList<>();
+    List<Map<String, String>> moves = new ArrayList<>();
     StringBuilder currentMove = new StringBuilder();
     int parenCount = 0;
     boolean expectMoveText = true;
+    String currentComment = null;
 
     for (int i = 0; i < moveText.length(); i++) {
       char c = moveText.charAt(i);
-      if (c == '(') {
+      if (c == '('.codePointAt(0)) {
         parenCount++;
         if (currentMove.length() > 0) {
-          moves.add(currentMove.toString().trim());
+          moves << [move: currentMove.toString().trim()]
           currentMove.setLength(0);
         }
-        currentMove.append(c);
+        moves << [openParen: "("] // Add this line
         expectMoveText = true;
-      } else if (c == ')') {
+      } else if (c == ')'.codePointAt(0)) {
         parenCount--;
         if (currentMove.length() > 0) {
-          moves.add(currentMove.toString().trim());
+          moves << [move: currentMove.toString().trim()]
           currentMove.setLength(0);
         }
-        currentMove.append(c);
+        moves << [closeParen: ")"]  //and this line
         expectMoveText = true;
       }
       else if (Character.isWhitespace(c) && parenCount == 0) {
         if (currentMove.length() > 0) {
-          if (!currentMove.find("^\\d*\$") && !currentMove.find("^\\*\$")) {
-            moves.add(currentMove.toString().trim());
+          if (!currentMove.find("^\\d*\$")  && !currentMove.find("^\\*\$"))
+          {
+            moves << [move: currentMove.toString().trim()]
           }
           currentMove.setLength(0);
         }
         expectMoveText = true;
-      } else {
+      } else if (c == '{'.codePointAt(0)) {
+        StringBuilder comment = new StringBuilder();
+        i++;
+        while (i < moveText.length() && moveText[i] != '}') {
+          comment.append(moveText.charAt(i));
+          i++;
+        }
+        currentComment = comment.toString().trim();
+        if(moves.size()>0)
+          moves[-1]['comment'] = currentComment
+        expectMoveText = false;
+      }
+      else {
         currentMove.append(c);
         expectMoveText = false;
       }
     }
     if (currentMove.length() > 0) {
-      if (!currentMove.find("^\\d*\$") && !currentMove.find("^\\*\$")) {
-        moves.add(currentMove.toString().trim());
+      if (!currentMove.find("^\\d*\$")  && !currentMove.find("^\\*\$"))
+      {
+        moves << [move: currentMove.toString().trim()]
       }
     }
-    String[] movesArray = moves.toArray(new String[0]);
 
-
-    for (int i = 0; i < movesArray.length; i++) {
-      String move = movesArray[i];
-      if (move.isEmpty()) {
-        continue; // Skip empty strings
-      }
-      if (move.matches("\\s*[1-9][0-9]*\\.\\s*"))
-      {
-        continue;
-      }
-      if (move.equals("(")) {
-        StringBuilder variationText = new StringBuilder();
-        int variationParenCount = 1;
-        i++;
-        while (i < movesArray.length && variationParenCount > 0) {
-          String currentVarMove = movesArray[i];
-          if (currentVarMove.equals("(")) {
-            variationParenCount++;
-          } else if (currentVarMove.equals(")")) {
-            variationParenCount--;
+    for (int i = 0; i < moves.size(); i++) {
+      def move = moves[i].move
+      def comment = moves[i].comment
+      def openParen = moves[i].openParen
+      def closeParen = moves[i].closeParen
+      def movePattern = Pattern.compile("\\s*([1-9][0-9]*)?\\s*")
+      if (!move || move.empty) {
+        if(openParen != null){
+          if (prevPly != null)
+          {
+            StringBuilder variationText = new StringBuilder().append('( ');
+            int variationParenCount = 1;
+            i++;
+            while (i < moves.size() && variationParenCount > 0) {
+              if(moves[i].openParen != null){
+                variationParenCount++;
+                variationText.append(" ( ")
+              }
+              else if (moves[i].closeParen != null){
+                variationParenCount--
+                variationText.append(" ) ")
+              }
+              else{
+                variationText.append(moves[i].move).append(" ");
+              }
+              i++;
+            }
+            Ply variationPly = parseMoveTextToPlies(variationText.toString().trim(), tokenizer);
+            prevPly.variations << variationPly;
+            i--;
+            continue;
           }
-          if (variationParenCount > 0) {
-            variationText.append(currentVarMove).append(" ");
-          }
-          i++;
         }
-        Ply variationPly = parseMoveTextToPlies(variationText.toString().trim());
-        prevPly.variations << variationPly;
-        i--;
+        continue; // Skip empty strings
+      } else if (move.matches("\\s*[1-9][0-9]*\\.\\s*")) {
         continue;
       }
-      if (move.equals(")")) {
-        break;
-      }
 
-      Ply currentPly = new Ply(san: move, prev: prevPly);
+
+      Ply currentPly = new Ply(san: move, prev: prevPly, commentAfter: comment);
+      currentComment = null;
       if (firstPly == null) {
         firstPly = currentPly;
       }

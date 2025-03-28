@@ -180,8 +180,8 @@ class DeserialiserSpec extends Specification {
         then:
         game != null
         Ply firstPly = game.firstPly
-        firstPly.commentBefore == "This is a comment"
-        firstPly.next.commentBefore == "Another comment"
+        firstPly.commentAfter == "This is a comment"
+        firstPly.next.commentAfter == "Another comment"
         game.startingMoveNumber == 1
     }
 
@@ -196,7 +196,7 @@ class DeserialiserSpec extends Specification {
             [Black "You"]
             [Result "*"]
 
-            1. e4 (1. d4) c5 2. Nf3 d6 *
+            1. e4 (1. d4 e5 2. c4 f5 ) c5 2. Nf3 d6 *
             """
         Deserialiser deserialiser = new Deserialiser()
 
@@ -294,7 +294,7 @@ class DeserialiserSpec extends Specification {
 
         then:
         game != null
-        game.tags.size() == 13
+        game.tags.size() == 11
         game.result == "1/2-1/2"
         game.firstPly.san == "d4"
         game.firstPly.next.san == "Nf6"
