@@ -387,9 +387,9 @@ class DeserialiserSpec extends Specification {
         firstPly.san == "e4"
         firstPly.variations.size() == 1
         firstPly.variations[0].san == "d4"
-        firstPly.variations[0].commentBefore == "D Queen's Pawn"
+        firstPly.variations[0].commentAfter == "D Queen's Pawn"
         game.firstPly.next.san == "c5"
-        game.firstPly.next.commentBefore == "Sicilian"
+        game.firstPly.next.commentAfter == "Sicilian"
         game.startingMoveNumber == 1
     }
 

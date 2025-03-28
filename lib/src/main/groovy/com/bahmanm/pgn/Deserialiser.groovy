@@ -267,6 +267,9 @@ class Deserialiser {
               i++;
             }
             Ply variationPly = parseMoveTextToPlies(variationText.toString().trim(), tokenizer);
+            if (comment) {
+              variationPly.commentAfter = comment
+            }
             prevPly.variations << variationPly;
             i--;
             continue;
