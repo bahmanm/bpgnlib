@@ -111,21 +111,16 @@ class Deserialiser {
   }
 
   private String parseResult(String moveText) {
-    def wonGamePattern = Pattern.compile("(1 0|0 1)\$")
-    def matcher = wonGamePattern.matcher(moveText)
-    if (matcher.find()) {
-      def result = matcher.group(1).trim()
-      result.replaceAll("\\s+", " ")
-      return result.replaceAll(" ", "-")
-    }
-
-    def drawnGamePattern = Pattern.compile("(1\\s*/2-1/2)\$")
-    matcher = drawnGamePattern.matcher(moveText)
-    if (matcher.find()) {
+    if (moveText =~ /.*(1\s*0|0\s*1)$/) {
+      return moveText.find(/(1\s*0|0\s*1)$/)
+              .trim()
+              .replaceAll(/\s+/, ' ')
+              .replaceAll(' ', '-')
+    } else if (moveText =~ /.*1\s*\/2-1\/2$/) {
       return '1/2-1/2'
+    } else {
+      return '*'
     }
-
-    return '*' // Default result if no match is found
   }
 
   // Modified parseMoveText to return the raw move text string
