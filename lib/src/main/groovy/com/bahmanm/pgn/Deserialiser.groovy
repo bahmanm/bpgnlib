@@ -66,7 +66,7 @@ class Deserialiser {
   }
 
   private List<Tag> parseTags(StreamTokenizer tokenizer) {
-    List<Tag> tags = []
+    def result = [] as List<Tag>
     while (true) {
       def token = tokenizer.nextToken()
       if (token == BRACK_OPEN) {
@@ -84,13 +84,13 @@ class Deserialiser {
           tokenizer.pushBack()
           break
         }
-        tags << new Tag(key, value)
+        result << new Tag(key, value)
       } else {
         tokenizer.pushBack()
         break
       }
     }
-    return tags
+    return result
   }  
 
   private Integer parseStartingMoveNumber(StreamTokenizer tokenizer) {
