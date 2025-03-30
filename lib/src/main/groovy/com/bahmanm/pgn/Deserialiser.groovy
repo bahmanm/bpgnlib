@@ -17,6 +17,13 @@ import static java.io.StreamTokenizer.TT_WORD
 @Slf4j
 @CompileStatic
 class Deserialiser {
+  
+  private final static Integer PAREN_OPEN = '('.codePointAt(0)
+  private final static Integer PAREN_CLOSE = ')'.codePointAt(0)
+  private final static Integer CURLY_OPEN = '{'.codePointAt(0)
+  private final static Integer CURLY_CLOSE = '}'.codePointAt(0)
+  private final static Integer BRACK_OPEN = '['.codePointAt(0)
+  private final static Integer BRACK_CLOSE = ']'.codePointAt(0)  
 
   /**
    * Deserializes a PGN string from a  into a Game object.
@@ -26,7 +33,7 @@ class Deserialiser {
    * @throws IllegalArgumentException if the input String is null
    */
   Game deserialise(String pgn) {
-    if (pgn == null) {
+    if (!pgn || pgn.empty) {
       throw new IllegalArgumentException("PGN string cannot be null")
     }
 
@@ -135,9 +142,7 @@ class Deserialiser {
 
   // Modified parseMoveText to return the raw move text string
   private String parseMoveText(StreamTokenizer tokenizer) {
-    def moveText = ''
     int token;
-
     // Consume tokens until the end of the stream or the start of the move text
     while ((token = tokenizer.nextToken()) != TT_EOF) {
       if (token == TT_NUMBER ||
@@ -152,15 +157,16 @@ class Deserialiser {
       }
     }
 
+    def moveText = ''
     while ((token = tokenizer.nextToken()) != TT_EOF) {
       def word = tokenizer.sval;
-      if ('(' == word) {
+      if (token == PAREN_OPEN) {
         moveText += ' ( '
-      } else if (')' == word) {
+      } else if (token == PAREN_CLOSE) {
         moveText += ' ) '
       } else if (token == TT_NUMBER) {
         moveText += "${tokenizer.nval.intValue()} "
-      } else if (token == TT_WORD){
+      } else if (token == TT_WORD) {
         moveText += "${word} "
       } else if (word =~ /^\{/) {
         def comment = ''
@@ -180,10 +186,8 @@ class Deserialiser {
 
   private Ply parseMoveTextToPlies(String moveText, StreamTokenizer tokenizer) {
     if (moveText =~ /^\s*\(.+\)\s*$/) {
-      moveText = moveText.substring(1, -1)
+      moveText = moveText.substring(1, moveText.size()-1)
     }
-    Ply firstPly = null;
-    Ply prevPly = null;
     List<Map<String, String>> moves = new ArrayList<>();
     def currentMove = ''
     int parenCount = 0;
@@ -195,13 +199,14 @@ class Deserialiser {
           moves << [move: currentMove.trim()]
           currentMove = ''
         }
-        moves << [openParen: "("] // Add this line
+        moves << [openParen: '('] 
       } else if (')' == moveText[i]) {
         parenCount--;
         if (!currentMove.empty) {
           moves << [move: currentMove.trim()]
         }
-        moves << [closeParen: ")"]  //and this line
+        moves << [closeParen: ')']
+        currentMove = ''
       } else if (moveText[i] =~ /\s+/ && parenCount == 0) {
         if (!currentMove.empty) {
           if (!(currentMove =~ /^\s*\d+\s*$/) && !(currentMove =~ /^\*$/)) {
@@ -242,35 +247,34 @@ class Deserialiser {
       }
     }
 
+    Ply firstPly = null
+    Ply prevPly = null
     for (int i = 0; i < moves.size(); i++) {
       def move = moves[i].move
       def comment = moves[i].comment
       def openParen = moves[i].openParen
       def closeParen = moves[i].closeParen
-      def nag = moves[i].nag
+      def nag = moves[i].nag ?: ''
       def movePattern = Pattern.compile("\\s*([1-9][0-9]*)?\\s*")
       if (!move || move.empty) {
-        if(openParen != null){
-          if (prevPly != null)
-          {
-            StringBuilder variationText = new StringBuilder().append('( ');
+        if (openParen) {
+          if (prevPly) {
+            def variationText = '( '
             int variationParenCount = 1;
             i++;
             while (i < moves.size() && variationParenCount > 0) {
-              if(moves[i].openParen != null){
+              if(moves[i].openParen) {
                 variationParenCount++;
-                variationText.append(" ( ")
-              }
-              else if (moves[i].closeParen != null){
+                variationText += ' ( '
+              } else if (moves[i].closeParen) {
                 variationParenCount--
-                variationText.append(" ) ")
-              }
-              else{
-                variationText.append(moves[i].move).append(" ");
+                variationText += ' ) '
+              } else {
+                variationText += "${moves[i].move} "
               }
               i++;
             }
-            Ply variationPly = parseMoveTextToPlies(variationText.toString().trim(), tokenizer);
+            def variationPly = parseMoveTextToPlies(variationText.trim(), tokenizer);
             if (comment) {
               variationPly.commentAfter = comment
             }
@@ -284,16 +288,11 @@ class Deserialiser {
         continue;
       }
 
-      def currentPly
-      if (nag) {
-        currentPly = new Ply(san: move, prev: prevPly, commentAfter: comment, nag: nag)        
-      } else {
-        currentPly = new Ply(san: move, prev: prevPly, commentAfter: comment)
-      }
-      if (firstPly == null) {
+      def currentPly = new Ply(san: move, prev: prevPly, commentAfter: comment, nag: nag)
+      if (!firstPly) {
         firstPly = currentPly;
       }
-      if (prevPly != null) {
+      if (prevPly) {
         prevPly.next = currentPly;
       }
       prevPly = currentPly;
