@@ -24,6 +24,7 @@ class Deserialiser {
   private final static Integer CURLY_CLOSE = '}'.codePointAt(0)
   private final static Integer BRACK_OPEN = '['.codePointAt(0)
   private final static Integer BRACK_CLOSE = ']'.codePointAt(0)  
+  private final static Integer QUOTE_DOUBLE = '"'.codePointAt(0)
 
   /**
    * Deserializes a PGN string from a  into a Game object.
@@ -38,88 +39,86 @@ class Deserialiser {
     }
 
     try {
-      StringReader reader = new StringReader(pgn);
-      StreamTokenizer tokenizer = new StreamTokenizer(reader);
-      tokenizer.resetSyntax();
-      tokenizer.wordChars('!'.codePointAt(0), '~'.codePointAt(0));
-      tokenizer.whitespaceChars('\n'.codePointAt(0), ' '.codePointAt(0));
-      tokenizer.quoteChar('"'.codePointAt(0));
-      //tokenizer.commentChar('{'.codePointAt(0));
-      tokenizer.ordinaryChar('['.codePointAt(0));
-      tokenizer.ordinaryChar(']'.codePointAt(0));
-      tokenizer.ordinaryChar('('.codePointAt(0));
-      tokenizer.ordinaryChar(')'.codePointAt(0));
-      tokenizer.parseNumbers();  // Keep number parsing for tags and move number
-      tokenizer.eolIsSignificant(false);
+      StringReader reader = new StringReader(pgn)
+      
+      StreamTokenizer tokenizer = new StreamTokenizer(reader)
+      tokenizer.resetSyntax()
+      tokenizer.wordChars('!'.codePointAt(0), '~'.codePointAt(0))
+      tokenizer.whitespaceChars('\n'.codePointAt(0), ' '.codePointAt(0))
+      tokenizer.quoteChar(QUOTE_DOUBLE)
+      tokenizer.ordinaryChar(BRACK_OPEN)
+      tokenizer.ordinaryChar(BRACK_CLOSE)
+      tokenizer.ordinaryChar(PAREN_OPEN)
+      tokenizer.ordinaryChar(PAREN_CLOSE)
+      tokenizer.parseNumbers() 
+      tokenizer.eolIsSignificant(false)
 
-      List<Tag> tags = parseTags(tokenizer);
-      Integer startingMoveNumber = parseStartingMoveNumber(tags, tokenizer);
-      String moveText = parseMoveText(tokenizer); // Get move text as a string
-      String result = parseResult(moveText);
-      Ply firstPly = parseMoveTextToPlies(moveText, tokenizer); // *Process the move text string*
-      return new Game(tags, startingMoveNumber, firstPly, result);
+      def tags = parseTags(tokenizer)
+      def startingMoveNumber = parseStartingMoveNumber(tokenizer)
+      def moveText = parseMoveText(tokenizer) // Get move text as a string
+      def result = parseResult(moveText)
+      def firstPly = parseMoveTextToPlies(moveText, tokenizer) // *Process the move text string*
+      return new Game(tags, startingMoveNumber, firstPly, result)
     } catch (IOException e) {
-      log.error("Error during deserialization: ${e.message}", e);
-      throw new RuntimeException(e);
-    } finally {
-      // No need to close StringReader.
+      log.error("Error during deserialization: ${e.message}", e)
+      throw new RuntimeException(e)
     }
   }
 
-  private Integer parseStartingMoveNumber(List<Tag> tags, StreamTokenizer tokenizer) {
+  private List<Tag> parseTags(StreamTokenizer tokenizer) {
+    List<Tag> tags = []
+    while (true) {
+      def token = tokenizer.nextToken()
+      if (token == BRACK_OPEN) {
+        tokenizer.nextToken()
+        String key = tokenizer.sval
+        if (!key) {
+          break
+        }
+        if (tokenizer.nextToken() != QUOTE_DOUBLE) {
+          tokenizer.pushBack()
+          break
+        }
+        def value = tokenizer.sval
+        if (tokenizer.nextToken() != BRACK_CLOSE) {
+          tokenizer.pushBack()
+          break
+        }
+        tags << new Tag(key, value)
+      } else {
+        tokenizer.pushBack()
+        break
+      }
+    }
+    return tags
+  }  
+
+  private Integer parseStartingMoveNumber(StreamTokenizer tokenizer) {
     // Default starting move number
-    int startingMoveNumber = 1;
-    int firstMoveNumber = -1;
+    int startingMoveNumber = 1
+    int firstMoveNumber = -1
 
     //save the tokenizer state
-    tokenizer.pushBack();
+    tokenizer.pushBack()
 
     // Iterate through the tokens until we find a move number
     while (tokenizer.nextToken() != TT_EOF) {
       if (tokenizer.ttype == TT_NUMBER) {
-        firstMoveNumber = (int) tokenizer.nval;
-        break;
+        firstMoveNumber = tokenizer.nval.intValue()
+        break
       }
       if (tokenizer.ttype == TT_WORD && tokenizer.sval?.matches("^[1-9][0-9]*\\..*\$")) {
-        String number = tokenizer.sval.split("\\.")[0];
-        firstMoveNumber = Integer.parseInt(number);
-        break;
+        String number = tokenizer.sval.split("\\.")[0]
+        firstMoveNumber = Integer.parseInt(number)
+        break
       }
     }
     if (firstMoveNumber > 0) {
-      startingMoveNumber = firstMoveNumber;
+      startingMoveNumber = firstMoveNumber
     }
 
-    tokenizer.pushBack();
-    return startingMoveNumber;
-  }
-
-  private List<Tag> parseTags(StreamTokenizer tokenizer) {
-    List<Tag> tags = [];
-    while (true) {
-      int token = tokenizer.nextToken();
-      if (token == '[') {
-        tokenizer.nextToken();
-        String key = tokenizer.sval;
-        if (key == null) {
-          break;
-        }
-        if (tokenizer.nextToken() != '"'.codePointAt(0)) {
-          tokenizer.pushBack();
-          break;
-        }
-        String value = tokenizer.sval;
-        if (tokenizer.nextToken() != ']') {
-          tokenizer.pushBack();
-          break;
-        }
-        tags << new Tag(key, value);
-      } else {
-        tokenizer.pushBack();
-        break;
-      }
-    }
-    return tags;
+    tokenizer.pushBack()
+    return startingMoveNumber
   }
 
   private String parseResult(String moveText) {
@@ -137,29 +136,29 @@ class Deserialiser {
       return '1/2-1/2'
     }
 
-    return '*'; // Default result if no match is found
+    return '*' // Default result if no match is found
   }
 
   // Modified parseMoveText to return the raw move text string
   private String parseMoveText(StreamTokenizer tokenizer) {
-    int token;
+    int token
     // Consume tokens until the end of the stream or the start of the move text
     while ((token = tokenizer.nextToken()) != TT_EOF) {
       if (token == TT_NUMBER ||
               (token == TT_WORD && tokenizer.sval?.matches("^[1-9][0-9]*\\..*\$")) ||
               (token == TT_WORD && ["1-0", "0-1", "1/2-1/2", "*"].contains(tokenizer.sval))) {
-        tokenizer.pushBack();
-        break;
+        tokenizer.pushBack()
+        break
       }
       if ('[' == tokenizer.sval) {
-        tokenizer.pushBack();
-        break;
+        tokenizer.pushBack()
+        break
       }
     }
 
     def moveText = ''
     while ((token = tokenizer.nextToken()) != TT_EOF) {
-      def word = tokenizer.sval;
+      def word = tokenizer.sval
       if (token == PAREN_OPEN) {
         moveText += ' ( '
       } else if (token == PAREN_CLOSE) {
@@ -188,20 +187,20 @@ class Deserialiser {
     if (moveText =~ /^\s*\(.+\)\s*$/) {
       moveText = moveText.substring(1, moveText.size()-1)
     }
-    List<Map<String, String>> moves = new ArrayList<>();
+    List<Map<String, String>> moves = new ArrayList<>()
     def currentMove = ''
-    int parenCount = 0;
+    int parenCount = 0
 
-    for (int i = 0; i < moveText.length(); i++) {
+    for (def i = 0; i < moveText.size(); i++) {
       if ('(' == moveText[i]) {
-        parenCount++;
+        parenCount++
         if (! currentMove.empty) {
           moves << [move: currentMove.trim()]
           currentMove = ''
         }
         moves << [openParen: '('] 
       } else if (')' == moveText[i]) {
-        parenCount--;
+        parenCount--
         if (!currentMove.empty) {
           moves << [move: currentMove.trim()]
         }
@@ -216,10 +215,10 @@ class Deserialiser {
         }
       } else if ('{' == moveText[i]) {
         def comment = ''
-        i++;
+        i++
         while (i < moveText.length() && moveText[i] != '}') {
           comment += moveText[i]
-          i++;
+          i++
         }
         if (! moves.empty) {
           moves[-1]['comment'] = comment.trim()
@@ -249,7 +248,7 @@ class Deserialiser {
 
     Ply firstPly = null
     Ply prevPly = null
-    for (int i = 0; i < moves.size(); i++) {
+    for (def i = 0; i < moves.size(); i++) {
       def move = moves[i].move
       def comment = moves[i].comment
       def openParen = moves[i].openParen
@@ -260,11 +259,11 @@ class Deserialiser {
         if (openParen) {
           if (prevPly) {
             def variationText = '( '
-            int variationParenCount = 1;
-            i++;
+            int variationParenCount = 1
+            i++
             while (i < moves.size() && variationParenCount > 0) {
               if(moves[i].openParen) {
-                variationParenCount++;
+                variationParenCount++
                 variationText += ' ( '
               } else if (moves[i].closeParen) {
                 variationParenCount--
@@ -272,31 +271,31 @@ class Deserialiser {
               } else {
                 variationText += "${moves[i].move} "
               }
-              i++;
+              i++
             }
-            def variationPly = parseMoveTextToPlies(variationText.trim(), tokenizer);
+            def variationPly = parseMoveTextToPlies(variationText.trim(), tokenizer)
             if (comment) {
               variationPly.commentAfter = comment
             }
-            prevPly.variations << variationPly;
-            i--;
-            continue;
+            prevPly.variations << variationPly
+            i--
+            continue
           }
         }
-        continue; // Skip empty strings
+        continue // Skip empty strings
       } else if (move.matches("\\s*[1-9][0-9]*\\.\\s*")) {
-        continue;
+        continue
       }
 
       def currentPly = new Ply(san: move, prev: prevPly, commentAfter: comment, nag: nag)
       if (!firstPly) {
-        firstPly = currentPly;
+        firstPly = currentPly
       }
       if (prevPly) {
-        prevPly.next = currentPly;
+        prevPly.next = currentPly
       }
-      prevPly = currentPly;
+      prevPly = currentPly
     }
-    return firstPly;
+    return firstPly
   }
 }
