@@ -9,6 +9,11 @@ import groovy.util.logging.Slf4j
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 
+import static java.io.StreamTokenizer.TT_EOF
+import static java.io.StreamTokenizer.TT_EOL
+import static java.io.StreamTokenizer.TT_NUMBER
+import static java.io.StreamTokenizer.TT_WORD
+
 @Slf4j
 @CompileStatic
 class Deserialiser {
@@ -63,12 +68,12 @@ class Deserialiser {
     tokenizer.pushBack();
 
     // Iterate through the tokens until we find a move number
-    while (tokenizer.nextToken() != StreamTokenizer.TT_EOF) {
-      if (tokenizer.ttype == StreamTokenizer.TT_NUMBER) {
+    while (tokenizer.nextToken() != TT_EOF) {
+      if (tokenizer.ttype == TT_NUMBER) {
         firstMoveNumber = (int) tokenizer.nval;
         break;
       }
-      if (tokenizer.ttype == StreamTokenizer.TT_WORD && tokenizer.sval?.matches("^[1-9][0-9]*\\..*\$")) {
+      if (tokenizer.ttype == TT_WORD && tokenizer.sval?.matches("^[1-9][0-9]*\\..*\$")) {
         String number = tokenizer.sval.split("\\.")[0];
         firstMoveNumber = Integer.parseInt(number);
         break;
@@ -130,112 +135,110 @@ class Deserialiser {
 
   // Modified parseMoveText to return the raw move text string
   private String parseMoveText(StreamTokenizer tokenizer) {
-    StringBuilder moveText = new StringBuilder();
+    def moveText = ''
     int token;
 
     // Consume tokens until the end of the stream or the start of the move text
-    while ((token = tokenizer.nextToken()) != StreamTokenizer.TT_EOF) {
-      if (token == StreamTokenizer.TT_NUMBER ||
-              (token == StreamTokenizer.TT_WORD && tokenizer.sval?.matches("^[1-9][0-9]*\\..*\$")) ||
-              (token == StreamTokenizer.TT_WORD && ["1-0", "0-1", "1/2-1/2", "*"].contains(tokenizer.sval))) {
+    while ((token = tokenizer.nextToken()) != TT_EOF) {
+      if (token == TT_NUMBER ||
+              (token == TT_WORD && tokenizer.sval?.matches("^[1-9][0-9]*\\..*\$")) ||
+              (token == TT_WORD && ["1-0", "0-1", "1/2-1/2", "*"].contains(tokenizer.sval))) {
         tokenizer.pushBack();
         break;
       }
-      if (token == '[') {
+      if ('[' == tokenizer.sval) {
         tokenizer.pushBack();
         break;
       }
     }
 
-    while ((token = tokenizer.nextToken()) != StreamTokenizer.TT_EOF) {
-      String word = tokenizer.sval;
-      if (token == '(') {
-        moveText.append(" ( ");
-      } else if (token == ')') {
-        moveText.append(" ) ");
-      }
-      else if (token == StreamTokenizer.TT_NUMBER) {
-        moveText.append((int) tokenizer.nval).append(" ");
-      }
-      else if (token == StreamTokenizer.TT_WORD){
-        moveText.append(word).append(" ");
-      } else if (word.find('^{')) {
-        StringBuilder comment = new StringBuilder();
-        comment.append(word.replaceAll('\\{', ''))
-        while ((token = tokenizer.nextToken()) != StreamTokenizer.TT_EOF && token != '}'.codePointAt(0)) {
-          if (token == StreamTokenizer.TT_EOL) {
-            comment.append(" ");
+    while ((token = tokenizer.nextToken()) != TT_EOF) {
+      def word = tokenizer.sval;
+      if ('(' == word) {
+        moveText += ' ( '
+      } else if (')' == word) {
+        moveText += ' ) '
+      } else if (token == TT_NUMBER) {
+        moveText += "${tokenizer.nval.intValue()} "
+      } else if (token == TT_WORD){
+        moveText += "${word} "
+      } else if (word =~ /^\{/) {
+        def comment = ''
+        comment += word.replaceAll(/\{/, '')
+        while ((token = tokenizer.nextToken()) != TT_EOF && '}' != word) { //token != '}'.codePointAt(0)) {
+          if (token == TT_EOL) {
+            comment += ' '
           } else {
-            comment.append(tokenizer.sval);
+            comment += tokenizer.sval
           }
         }
-        moveText.append(" { ").append(comment.toString().trim()).append(" } ");
+        moveText += " { ${comment.trim()} } "
       }
     }
-    return moveText.toString().trim();
+    return moveText.trim()
   }
 
   private Ply parseMoveTextToPlies(String moveText, StreamTokenizer tokenizer) {
-    if (moveText.find('^\\s*\\(.+\\)\\s*$')) {
-      moveText = moveText.substring(1, moveText.size()-1)
+    if (moveText =~ /^\s*\(.+\)\s*$/) {
+      moveText = moveText.substring(1, -1)
     }
     Ply firstPly = null;
     Ply prevPly = null;
     List<Map<String, String>> moves = new ArrayList<>();
-    StringBuilder currentMove = new StringBuilder();
+    def currentMove = ''
     int parenCount = 0;
-    boolean expectMoveText = true;
-    String currentComment = null;
 
     for (int i = 0; i < moveText.length(); i++) {
-      char c = moveText.charAt(i);
-      if (c == '('.codePointAt(0)) {
+      if ('(' == moveText[i]) {
         parenCount++;
-        if (currentMove.length() > 0) {
-          moves << [move: currentMove.toString().trim()]
-          currentMove.setLength(0);
+        if (! currentMove.empty) {
+          moves << [move: currentMove.trim()]
+          currentMove = ''
         }
         moves << [openParen: "("] // Add this line
-        expectMoveText = true;
-      } else if (c == ')'.codePointAt(0)) {
+      } else if (')' == moveText[i]) {
         parenCount--;
-        if (currentMove.length() > 0) {
-          moves << [move: currentMove.toString().trim()]
-          currentMove.setLength(0);
+        if (!currentMove.empty) {
+          moves << [move: currentMove.trim()]
         }
         moves << [closeParen: ")"]  //and this line
-        expectMoveText = true;
-      }
-      else if (Character.isWhitespace(c) && parenCount == 0) {
-        if (currentMove.length() > 0) {
-          if (!currentMove.find("^\\d*\$")  && !currentMove.find("^\\*\$"))
-          {
-            moves << [move: currentMove.toString().trim()]
+      } else if (moveText[i] =~ /\s+/ && parenCount == 0) {
+        if (!currentMove.empty) {
+          if (!(currentMove =~ /^\s*\d+\s*$/) && !(currentMove =~ /^\*$/)) {
+            moves << [move: currentMove.trim()]
           }
-          currentMove.setLength(0);
+          currentMove = ''
         }
-        expectMoveText = true;
-      } else if (c == '{'.codePointAt(0)) {
-        StringBuilder comment = new StringBuilder();
+      } else if ('{' == moveText[i]) {
+        def comment = ''
         i++;
         while (i < moveText.length() && moveText[i] != '}') {
-          comment.append(moveText.charAt(i));
+          comment += moveText[i]
           i++;
         }
-        currentComment = comment.toString().trim();
-        if(moves.size()>0)
-          moves[-1]['comment'] = currentComment
-        expectMoveText = false;
+        if (! moves.empty) {
+          moves[-1]['comment'] = comment.trim()
+        }
+      } else if ('$' == moveText[i]) {
+        def nag = ''
+        i++
+        while (i<moveText.size() && moveText[i].find('\\d')) {
+          nag += moveText[i]
+          i++
+        }
+        if (! moves.empty) {
+          moves[-1]['nag'] = "\$${nag}" as String
+        }
+        i--
       }
       else {
-        currentMove.append(c);
-        expectMoveText = false;
+        currentMove += moveText[i]
       }
     }
-    if (currentMove.length() > 0) {
+    if (!currentMove.empty) {
       if (!currentMove.find("^\\d*\$")  && !currentMove.find("^\\*\$"))
       {
-        moves << [move: currentMove.toString().trim()]
+        moves << [move: currentMove.trim()]
       }
     }
 
@@ -244,6 +247,7 @@ class Deserialiser {
       def comment = moves[i].comment
       def openParen = moves[i].openParen
       def closeParen = moves[i].closeParen
+      def nag = moves[i].nag
       def movePattern = Pattern.compile("\\s*([1-9][0-9]*)?\\s*")
       if (!move || move.empty) {
         if(openParen != null){
@@ -280,9 +284,12 @@ class Deserialiser {
         continue;
       }
 
-
-      Ply currentPly = new Ply(san: move, prev: prevPly, commentAfter: comment);
-      currentComment = null;
+      def currentPly
+      if (nag) {
+        currentPly = new Ply(san: move, prev: prevPly, commentAfter: comment, nag: nag)        
+      } else {
+        currentPly = new Ply(san: move, prev: prevPly, commentAfter: comment)
+      }
       if (firstPly == null) {
         firstPly = currentPly;
       }
