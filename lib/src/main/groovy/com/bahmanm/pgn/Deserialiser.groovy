@@ -122,49 +122,63 @@ class Deserialiser {
       return '*'
     }
   }
+  
+  private void skipTokensUntilFirstMove(StreamTokenizer tokenizer) {
+    def token
+    def found = false
 
-  // Modified parseMoveText to return the raw move text string
-  private String parseMoveText(StreamTokenizer tokenizer) {
-    int token
-    // Consume tokens until the end of the stream or the start of the move text
-    while ((token = tokenizer.nextToken()) != TT_EOF) {
-      if (token == TT_NUMBER ||
-              (token == TT_WORD && tokenizer.sval?.matches("^[1-9][0-9]*\\..*\$")) ||
-              (token == TT_WORD && ["1-0", "0-1", "1/2-1/2", "*"].contains(tokenizer.sval))) {
-        tokenizer.pushBack()
-        break
-      }
-      if ('[' == tokenizer.sval) {
-        tokenizer.pushBack()
-        break
-      }
-    }
-
-    def moveText = ''
-    while ((token = tokenizer.nextToken()) != TT_EOF) {
-      def word = tokenizer.sval
-      if (token == PAREN_OPEN) {
-        moveText += ' ( '
-      } else if (token == PAREN_CLOSE) {
-        moveText += ' ) '
-      } else if (token == TT_NUMBER) {
-        moveText += "${tokenizer.nval.intValue()} "
+    while (!found && (token = tokenizer.nextToken()) != TT_EOF) {
+      if (token == TT_NUMBER) {
+        found = true        
       } else if (token == TT_WORD) {
-        moveText += "${word} "
-      } else if (word =~ /^\{/) {
-        def comment = ''
-        comment += word.replaceAll(/\{/, '')
-        while ((token = tokenizer.nextToken()) != TT_EOF && '}' != word) { //token != '}'.codePointAt(0)) {
-          if (token == TT_EOL) {
-            comment += ' '
-          } else {
-            comment += tokenizer.sval
-          }
+        if (tokenizer.sval =~ /^[1-9][0-9]*\..*$/) {
+          found = true          
+        } else if (tokenizer.sval in ['1-0', '0-1', '1/2-1/2', '*']) {
+          found = true
         }
-        moveText += " { ${comment.trim()} } "
+      } else if (token == BRACK_OPEN) {
+        found = true
+      }
+    }    
+    if (found) {
+      tokenizer.pushBack()
+    }
+  }
+  
+  private String parseComment(StreamTokenizer tokenizer, String text) {
+    def result = ''
+    result += text.replaceAll(/\{/, '')
+    
+    def token
+    while ((token = tokenizer.nextToken()) != TT_EOF && '}' != tokenizer.sval) {
+      if (token == TT_EOL) {
+        result += ' '
+      } else {
+        result += tokenizer.sval
+      }
+    }    
+    return result.trim()
+  }
+  
+  private String parseMoveText(StreamTokenizer tokenizer) {
+    skipTokensUntilFirstMove(tokenizer)
+    
+    def token
+    def result = ''
+    while ((token = tokenizer.nextToken()) != TT_EOF) {
+      if (token == PAREN_OPEN) {
+        result += ' ( '
+      } else if (token == PAREN_CLOSE) {
+        result += ' ) '
+      } else if (token == TT_NUMBER) {
+        result += "${tokenizer.nval.intValue()} "
+      } else if (token == TT_WORD) {
+        result += "${tokenizer.sval} "
+      } else if (tokenizer.sval =~ /^\{/) {
+        result += " { ${parseComment(tokenizer, tokenizer.sval)} } "
       }
     }
-    return moveText.trim()
+    return result.trim()
   }
 
   private Ply parseMoveTextToPlies(String moveText, StreamTokenizer tokenizer) {
