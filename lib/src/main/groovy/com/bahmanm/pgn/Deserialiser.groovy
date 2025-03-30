@@ -94,31 +94,20 @@ class Deserialiser {
   }  
 
   private Integer parseStartingMoveNumber(StreamTokenizer tokenizer) {
-    // Default starting move number
-    int startingMoveNumber = 1
-    int firstMoveNumber = -1
-
-    //save the tokenizer state
     tokenizer.pushBack()
-
-    // Iterate through the tokens until we find a move number
+    
+    def result = -1
     while (tokenizer.nextToken() != TT_EOF) {
       if (tokenizer.ttype == TT_NUMBER) {
-        firstMoveNumber = tokenizer.nval.intValue()
+        result = tokenizer.nval.intValue()
         break
-      }
-      if (tokenizer.ttype == TT_WORD && tokenizer.sval?.matches("^[1-9][0-9]*\\..*\$")) {
-        String number = tokenizer.sval.split("\\.")[0]
-        firstMoveNumber = Integer.parseInt(number)
+      } else if (tokenizer.ttype == TT_WORD && tokenizer.sval =~ /^[1-9][0-9]*\..*$/) {
+        result = tokenizer.sval.split(/\./)[0] as Integer
         break
       }
     }
-    if (firstMoveNumber > 0) {
-      startingMoveNumber = firstMoveNumber
-    }
-
     tokenizer.pushBack()
-    return startingMoveNumber
+    return result > 0 ? result : 1
   }
 
   private String parseResult(String moveText) {
