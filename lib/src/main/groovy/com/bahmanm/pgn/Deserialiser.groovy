@@ -1,12 +1,10 @@
 package com.bahmanm.pgn
 
-import groovy.transform.Canonical
 
 import com.bahmanm.pgn.models.*
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 
-import java.util.regex.Matcher
 import java.util.regex.Pattern
 
 import static java.io.StreamTokenizer.TT_EOF
@@ -55,9 +53,9 @@ class Deserialiser {
 
       def tags = parseTags(tokenizer)
       def startingMoveNumber = parseStartingMoveNumber(tokenizer)
-      def moveText = parseMoveText(tokenizer) // Get move text as a string
+      def moveText = getSanitisedMovesText(tokenizer) // Get move text as a string
       def result = parseResult(moveText)
-      def firstPly = parseMoveTextToPlies(moveText, tokenizer) // *Process the move text string*
+      def firstPly = parseMoveTextToPlies(moveText) // *Process the move text string*
       return new Game(tags, startingMoveNumber, firstPly, result)
     } catch (IOException e) {
       log.error("Error during deserialization: ${e.message}", e)
@@ -160,7 +158,7 @@ class Deserialiser {
     return result.trim()
   }
   
-  private String parseMoveText(StreamTokenizer tokenizer) {
+  private String getSanitisedMovesText(StreamTokenizer tokenizer) {
     skipTokensUntilFirstMove(tokenizer)
     
     def token
@@ -180,70 +178,79 @@ class Deserialiser {
     }
     return result.trim()
   }
-
-  private Ply parseMoveTextToPlies(String moveText, StreamTokenizer tokenizer) {
-    if (moveText =~ /^\s*\(.+\)\s*$/) {
-      moveText = moveText.substring(1, moveText.size()-1)
+  
+  private List<Map<String, String>> getElements(String movesText) {
+    if (movesText =~ /^\s*\(.+\)\s*$/) {
+      movesText = movesText.substring(1, movesText.size()-1)
     }
-    List<Map<String, String>> moves = new ArrayList<>()
+    
+    def result = [] as List<Map<String, String>>
+    def parenCount = 0
     def currentMove = ''
-    int parenCount = 0
+    def inComment = false
+    def currentComment = ''
+    def inNag = false
+    def currentNag = ''
 
-    for (def i = 0; i < moveText.size(); i++) {
-      if ('(' == moveText[i]) {
-        parenCount++
+    for (def s : movesText) {
+      if ('(' == s) {
+        parenCount += 1
         if (! currentMove.empty) {
-          moves << [move: currentMove.trim()]
+          result << [move: currentMove.trim()]
           currentMove = ''
         }
-        moves << [openParen: '('] 
-      } else if (')' == moveText[i]) {
-        parenCount--
+        result << [openParen: '(']
+      } else if (')' == s) {
+        parenCount -= 1
         if (!currentMove.empty) {
-          moves << [move: currentMove.trim()]
+          result << [move: currentMove.trim()]
         }
-        moves << [closeParen: ')']
+        result << [closeParen: ')']
         currentMove = ''
-      } else if (moveText[i] =~ /\s+/ && parenCount == 0) {
+      } else if ('{' == s) {
+        inComment = true
+      } else if (inComment) {
+        if ('}' == s) {
+          if (!result.empty) {
+            result[-1]['comment'] = currentComment.trim()
+          }
+          inComment = false          
+          currentComment = ''
+        } else {
+          currentComment += s
+        }
+      } else if ('$' == s) {
+        inNag = true
+        currentNag = '$'
+      } else if (inNag) {
+        if (s =~ /\d/) {
+          currentNag += s
+        } else {
+          if (!result.empty) {
+            result[-1]['nag'] = currentNag.trim()
+          }
+          inNag = false
+          currentNag = ''
+        }
+      } else if (s =~ /\s+/ && parenCount == 0) {
         if (!currentMove.empty) {
           if (!(currentMove =~ /^\s*\d+\s*$/) && !(currentMove =~ /^\*$/)) {
-            moves << [move: currentMove.trim()]
+            result << [move: currentMove.trim()]
           }
           currentMove = ''
         }
-      } else if ('{' == moveText[i]) {
-        def comment = ''
-        i++
-        while (i < moveText.length() && moveText[i] != '}') {
-          comment += moveText[i]
-          i++
-        }
-        if (! moves.empty) {
-          moves[-1]['comment'] = comment.trim()
-        }
-      } else if ('$' == moveText[i]) {
-        def nag = ''
-        i++
-        while (i<moveText.size() && moveText[i].find('\\d')) {
-          nag += moveText[i]
-          i++
-        }
-        if (! moves.empty) {
-          moves[-1]['nag'] = "\$${nag}" as String
-        }
-        i--
-      }
-      else {
-        currentMove += moveText[i]
+      } else {
+        currentMove += s
       }
     }
-    if (!currentMove.empty) {
-      if (!currentMove.find("^\\d*\$")  && !currentMove.find("^\\*\$"))
-      {
-        moves << [move: currentMove.trim()]
-      }
-    }
+    if (!currentMove.empty && !currentMove =~ /^\d*$/ && !currentMove =~ /^\*$/) {
+      result << [move: currentMove.trim()]
+    }    
+    return result
+  }
 
+  private Ply parseMoveTextToPlies(String moveText) {
+    def moves = getElements(moveText)
     Ply firstPly = null
     Ply prevPly = null
     for (def i = 0; i < moves.size(); i++) {
@@ -271,7 +278,7 @@ class Deserialiser {
               }
               i++
             }
-            def variationPly = parseMoveTextToPlies(variationText.trim(), tokenizer)
+            def variationPly = parseMoveTextToPlies(variationText.trim())
             if (comment) {
               variationPly.commentAfter = comment
             }
