@@ -5,6 +5,8 @@ import com.bahmanm.pgn.models.*
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 
+import java.util.stream.Stream
+
 import static java.io.StreamTokenizer.TT_EOF
 import static java.io.StreamTokenizer.TT_EOL
 import static java.io.StreamTokenizer.TT_NUMBER
@@ -22,6 +24,26 @@ class Deserialiser {
   private final static Integer BRACK_CLOSE = ']'.codePointAt(0)  
   private final static Integer QUOTE_DOUBLE = '"'.codePointAt(0)
   private final static Integer SIGIL = '$'.codePointAt(0)
+  
+  private StreamTokenizer tokenizer 
+  
+  Deserialiser(String pgn) {
+    if (!pgn || pgn.empty) {
+      throw new IllegalArgumentException("PGN string cannot be null")
+    }
+    def reader = new StringReader(pgn)
+    tokenizer = new StreamTokenizer(reader)
+    tokenizer.resetSyntax()
+    tokenizer.wordChars('!'.codePointAt(0), '~'.codePointAt(0))
+    tokenizer.whitespaceChars('\n'.codePointAt(0), ' '.codePointAt(0))
+    tokenizer.quoteChar(QUOTE_DOUBLE)
+    tokenizer.ordinaryChar(BRACK_OPEN)
+    tokenizer.ordinaryChar(BRACK_CLOSE)
+    tokenizer.ordinaryChar(PAREN_OPEN)
+    tokenizer.ordinaryChar(PAREN_CLOSE)
+    tokenizer.parseNumbers()
+    tokenizer.eolIsSignificant(false)    
+  }
 
   /**
    * Deserializes a PGN string into a Game object.
@@ -30,28 +52,11 @@ class Deserialiser {
    * @return A Game object representing the parsed PGN data, or null if parsing fails.
    * @throws IllegalArgumentException if the input String is null or empty
    */
-  Game deserialise(String pgn) {
-    if (!pgn || pgn.empty) {
-      throw new IllegalArgumentException("PGN string cannot be null")
-    }
-
+  Game deserialise() {
     try {
-      def reader = new StringReader(pgn)
-      def tokenizer = new StreamTokenizer(reader)
-      tokenizer.resetSyntax()
-      tokenizer.wordChars('!'.codePointAt(0), '~'.codePointAt(0))
-      tokenizer.whitespaceChars('\n'.codePointAt(0), ' '.codePointAt(0))
-      tokenizer.quoteChar(QUOTE_DOUBLE)
-      tokenizer.ordinaryChar(BRACK_OPEN)
-      tokenizer.ordinaryChar(BRACK_CLOSE)
-      tokenizer.ordinaryChar(PAREN_OPEN)
-      tokenizer.ordinaryChar(PAREN_CLOSE)
-      tokenizer.parseNumbers() 
-      tokenizer.eolIsSignificant(false)
-
-      def tags = parseTags(tokenizer)
-      def startingMoveNumber = parseStartingMoveNumber(tokenizer)
-      def moveText = getSanitisedMovesText(tokenizer)
+      def tags = parseTags()
+      def startingMoveNumber = parseStartingMoveNumber()
+      def moveText = getSanitisedMovesText()
       def result = parseResult(moveText)
       def firstPly = getPlies(moveText) 
       return new Game(tags, startingMoveNumber, firstPly, result)
@@ -61,7 +66,7 @@ class Deserialiser {
     }
   }
 
-  private List<Tag> parseTags(StreamTokenizer tokenizer) {
+  private List<Tag> parseTags() {
     def result = [] as List<Tag>
     while (true) {
       def token = tokenizer.nextToken()
@@ -89,7 +94,7 @@ class Deserialiser {
     return result
   }  
 
-  private Integer parseStartingMoveNumber(StreamTokenizer tokenizer) {
+  private Integer parseStartingMoveNumber() {
     tokenizer.pushBack()
     
     def result = -1
@@ -119,7 +124,7 @@ class Deserialiser {
     }
   }
   
-  private void skipTokensUntilFirstMove(StreamTokenizer tokenizer) {
+  private void skipTokensUntilFirstMove() {
     def token = null as Integer
     def found = false
 
@@ -141,8 +146,8 @@ class Deserialiser {
     }
   }
   
-  private String getSanitisedMovesText(StreamTokenizer tokenizer) {
-    skipTokensUntilFirstMove(tokenizer)
+  private String getSanitisedMovesText() {
+    skipTokensUntilFirstMove()
     
     def token
     def result = ''
