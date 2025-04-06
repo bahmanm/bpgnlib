@@ -1,5 +1,6 @@
 package com.bahmanm.pgn
 
+import com.bahmanm.pgn.models.Game
 import groovy.util.logging.Slf4j
 import spock.lang.Specification
 
@@ -9,13 +10,13 @@ class DeserialiserSpec extends Specification {
 
   def 'test empty input'() {
     when:
-    new Deserialiser(null).deserialise()
+    new Deserialiser(null).nextGame()
 
     then:
     thrown(IllegalArgumentException)
 
     when:
-    new Deserialiser('').deserialise()
+    new Deserialiser('').nextGame()
 
     then:
     thrown(IllegalArgumentException)
@@ -37,7 +38,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -65,7 +66,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -94,7 +95,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -125,7 +126,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -149,7 +150,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game.result == '1/2-1/2'
@@ -171,7 +172,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -197,7 +198,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -225,7 +226,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -254,7 +255,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -286,7 +287,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -303,7 +304,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -323,7 +324,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -338,7 +339,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -355,7 +356,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -375,7 +376,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -405,7 +406,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -425,12 +426,12 @@ class DeserialiserSpec extends Specification {
             [Black "Player2"]
             [Result "*"]
             
-            1... c5 2. Nf3 d6 *
+            1... c5 3. Nf3 d6 *
             '''
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -456,7 +457,7 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
@@ -482,12 +483,65 @@ class DeserialiserSpec extends Specification {
     def deserialiser = new Deserialiser(pgn)
 
     when:
-    def game = deserialiser.deserialise()
+    def game = deserialiser.nextGame()
 
     then:
     game != null
     game.firstPly.san == 'c5'
     game.firstPly.next.san == 'e4'
     game.startingMoveNumber == 2
+  }
+
+  def 'test multi-game PGN'() {
+    given:
+    def pgn = '''
+            [Event "Casual Game"]
+            [Site "Berlin GER"]
+            [Date "1852.10.04"]
+            [Round "-"]
+            [White "Adolf Anderssen"]
+            [Black "Jean Dufresne"]
+            [Result "1-0"]
+            [ECO "C33"]
+            [Opening "King's Gambit Accepted: Kieseritzky Gambit"]
+            [Variation "Allgaier Gambit"]
+            [Annotator "Neil McDonald"]
+            [Source "The King's Gambit"]
+            [PlyCount "47"]
+
+            1. e4 e5 2. f4 exf4 3. Nf3 g5 4. h4 g4 5. Ne5 h5 6. Bc4 Nh6 7. d4 d6 8. Nd3 Be7
+            9. Bxf4 Bxh4+ 10. g3 Bg5 11. Nc3 c6 12. Qd2 Bxf4 13. Nxf4 Ng8 14. O-O-O b5 15. Bb3 a5
+            16. a3 Na6 17. e5 d5 18. Ne4 dxe4 19. Nxh5 Rxh5 20. Rxh5 Bxd2+ 21. Rxd2 Qe7 22. Rh7
+            f5 23. exf6 Nxf6 24. Rh8+ Ng8 25. Bxg8 Qf6 26. Nxf6+ 1/2-1/2
+
+            [Event "Casual Game"]
+            [Site "London ENG"]
+            [Date "1851.05.24"]
+            [Round "1"]
+            [White "Adolf Anderssen"]
+            [Black "Lionel Kieseritzky"]
+            [Result "1-0"]
+            [ECO "C33"]
+            [Opening "King's Gambit Accepted, Kieseritzky Gambit"]
+            [Variation "Allgaier Gambit"]
+            [PlyCount "25"]
+
+            1. e4 e5 2. f4 exf4 3. Nf3 g5 4. h4 g4 5. Ne5 Nf6 6. Bc4 d5 7. exd5 b5 8. Bb3 Nxd5 9. O-O Be6 10. fxe6 fxe6 11. Qxg4 Qe7 12. Rf1 Rg8 13. Qh5+ Kd8 14. Rf7 1-0
+            '''
+    def deserialiser = new Deserialiser(pgn)
+    
+    when:
+    List<Game> games = []
+    def game
+    while (game = deserialiser.nextGame()) {
+      games << game
+    }
+
+    then:
+    games.size() == 2
+    games[0].result == '1/2-1/2'
+    games[0].tags.find { it.key == 'PlyCount' }.value == '47'
+    games[1].result == '1-0'
+    games[1].tags.find { it.key == 'PlyCount' }.value == '25'
   }
 }

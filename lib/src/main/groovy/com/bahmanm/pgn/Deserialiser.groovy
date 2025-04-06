@@ -5,10 +5,7 @@ import com.bahmanm.pgn.models.*
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 
-import java.util.stream.Stream
-
 import static java.io.StreamTokenizer.TT_EOF
-import static java.io.StreamTokenizer.TT_EOL
 import static java.io.StreamTokenizer.TT_NUMBER
 import static java.io.StreamTokenizer.TT_WORD
 
@@ -24,8 +21,10 @@ class Deserialiser {
   private final static Integer BRACK_CLOSE = ']'.codePointAt(0)  
   private final static Integer QUOTE_DOUBLE = '"'.codePointAt(0)
   private final static Integer SIGIL = '$'.codePointAt(0)
+  private final static Integer DOT = '.'.codePointAt(0)
   
-  private StreamTokenizer tokenizer 
+  private StreamTokenizer tokenizer
+  private Integer currentToken = null
   
   Deserialiser(String pgn) {
     if (!pgn || pgn.empty) {
@@ -33,6 +32,9 @@ class Deserialiser {
     }
     def reader = new StringReader(pgn)
     tokenizer = new StreamTokenizer(reader)
+  }
+  
+  private void configureTokeniser(Boolean isParseNumbers) {
     tokenizer.resetSyntax()
     tokenizer.wordChars('!'.codePointAt(0), '~'.codePointAt(0))
     tokenizer.whitespaceChars('\n'.codePointAt(0), ' '.codePointAt(0))
@@ -41,8 +43,28 @@ class Deserialiser {
     tokenizer.ordinaryChar(BRACK_CLOSE)
     tokenizer.ordinaryChar(PAREN_OPEN)
     tokenizer.ordinaryChar(PAREN_CLOSE)
-    tokenizer.parseNumbers()
-    tokenizer.eolIsSignificant(false)    
+    tokenizer.ordinaryChar('.'.codePointAt(0))
+    if (isParseNumbers) {
+      tokenizer.parseNumbers()
+    }
+    tokenizer.eolIsSignificant(false)
+  }
+  
+  private Integer readNextToken() {
+    currentToken = tokenizer.nextToken()
+    return currentToken
+  }
+  
+  private Integer getCurrentToken() {
+    return currentToken
+  }
+  
+  Game nextGame() {
+    if (currentToken == TT_EOF) {
+      return null
+    } else {
+      return deserialise()
+    }
   }
 
   /**
@@ -52,36 +74,42 @@ class Deserialiser {
    * @return A Game object representing the parsed PGN data, or null if parsing fails.
    * @throws IllegalArgumentException if the input String is null or empty
    */
-  Game deserialise() {
+  private Game deserialise() {
     try {
-      def tags = parseTags()
-      def startingMoveNumber = parseStartingMoveNumber()
-      def moveText = getSanitisedMovesText()
+      configureTokeniser(true)
+      def tags = readTags()
+      def startingMoveNumber = readStartingMoveNumber()
+      configureTokeniser(false)
+      def moveText = readGameMovesText()
       def result = parseResult(moveText)
-      def firstPly = getPlies(moveText) 
-      return new Game(tags, startingMoveNumber, firstPly, result)
+      def firstPly = parsePlies(moveText) 
+      if (!tags && !result && !moveText) {
+        return null
+      } else {
+        return new Game(tags, startingMoveNumber, firstPly, result ?: '*')
+      }
     } catch (IOException e) {
       log.error("Error during deserialization: ${e.message}", e)
       throw new RuntimeException(e)
     }
   }
 
-  private List<Tag> parseTags() {
+  private List<Tag> readTags() {
     def result = [] as List<Tag>
     while (true) {
-      def token = tokenizer.nextToken()
-      if (token == BRACK_OPEN) {
-        tokenizer.nextToken()
+      readNextToken()
+      if (currentToken == BRACK_OPEN) {
+        readNextToken()
         String key = tokenizer.sval
         if (!key) {
           break
         }
-        if (tokenizer.nextToken() != QUOTE_DOUBLE) {
+        if (readNextToken() != QUOTE_DOUBLE) {
           tokenizer.pushBack()
           break
         }
         def value = tokenizer.sval
-        if (tokenizer.nextToken() != BRACK_CLOSE) {
+        if (readNextToken() != BRACK_CLOSE) {
           tokenizer.pushBack()
           break
         }
@@ -94,15 +122,15 @@ class Deserialiser {
     return result
   }  
 
-  private Integer parseStartingMoveNumber() {
+  private Integer readStartingMoveNumber() {
     tokenizer.pushBack()
     
     def result = -1
-    while (tokenizer.nextToken() != TT_EOF) {
-      if (tokenizer.ttype == TT_NUMBER) {
+    while (readNextToken() != TT_EOF) {
+      if (currentToken == TT_NUMBER) {
         result = tokenizer.nval.intValue()
         break
-      } else if (tokenizer.ttype == TT_WORD && tokenizer.sval =~ /^[1-9][0-9]*\..*$/) {
+      } else if (currentToken == TT_WORD && tokenizer.sval =~ /^[1-9][0-9]*\..*$/) { // TODO Unreachable
         result = tokenizer.sval.split(/\./)[0] as Integer
         break
       }
@@ -112,32 +140,32 @@ class Deserialiser {
   }
 
   private String parseResult(String moveText) {
-    if (moveText =~ /.*(1\s*0|0\s*1)$/) {
-      return moveText.find(/(1\s*0|0\s*1)$/)
-              .trim()
-              .replaceAll(/\s+/, ' ')
-              .replaceAll(' ', '-')
-    } else if (moveText =~ /.*1\s*\/2-1\/2$/) {
+    if (moveText =~ /.*1 ?-0$/) {
+      return '1-0'
+    } else if (moveText =~ /.*0 ?-1$/) {
+      return '0-1'
+    } else if (moveText =~ /.*1 ?\/2-1\/2$/) {
       return '1/2-1/2'
-    } else {
+    } else if (moveText =~ /.*\*$/) {
       return '*'
+    } else {
+      return null
     }
   }
   
   private void skipTokensUntilFirstMove() {
-    def token = null as Integer
     def found = false
 
-    while (!found && (token = tokenizer.nextToken()) != TT_EOF) {
-      if (token == TT_NUMBER) {
+    while (!found && readNextToken() != TT_EOF) {
+      if (currentToken == TT_NUMBER) {
         found = true        
-      } else if (token == TT_WORD) {
+      } else if (currentToken == TT_WORD) { // TODO Unreachable
         if (tokenizer.sval =~ /^[1-9][0-9]*\..*$/) {
           found = true          
         } else if (tokenizer.sval in ['1-0', '0-1', '1/2-1/2', '*']) {
           found = true
         }
-      } else if (token == BRACK_OPEN) {
+      } else if (currentToken == BRACK_OPEN) {
         found = true
       }
     }    
@@ -146,20 +174,31 @@ class Deserialiser {
     }
   }
   
-  private String getSanitisedMovesText() {
+  private String readGameMovesText() {
     skipTokensUntilFirstMove()
     
-    def token
     def result = ''
-    while ((token = tokenizer.nextToken()) != TT_EOF) {
-      if (token == PAREN_OPEN) {
+    while (readNextToken() != TT_EOF) {
+      if (currentToken == PAREN_OPEN) {
         result += ' ( '
-      } else if (token == PAREN_CLOSE) {
+      } else if (currentToken == PAREN_CLOSE) {
         result += ' ) '
-      } else if (token == TT_NUMBER) {
-        result += "${tokenizer.nval.intValue()} "
-      } else if (token == TT_WORD) {
-        result += "${tokenizer.sval} "
+      } else if (currentToken == TT_NUMBER) {
+        if (!result.endsWith(' ')) {
+          result += ' '
+        }
+        result += "${tokenizer.nval.intValue()}"
+      } else if (currentToken == TT_WORD) {
+        if (!result.endsWith(' ')) {
+          result += ' '
+        }
+        result += "${tokenizer.sval}"
+      } else {
+        result += "${Character.toString(currentToken)}"
+      }
+      
+      if (result =~ /(1-0|0-1|\*|1\/2-1\/2)\s*$/) {
+        break
       }
     }
     return result.trim()
@@ -223,7 +262,7 @@ class Deserialiser {
           }
           currentMove = ''
         }
-      } else {
+      } else if (DOT != s) {
         currentMove += s
       }
     }
@@ -233,7 +272,7 @@ class Deserialiser {
     return result
   }
 
-  private Ply getPlies(String movesText) {
+  private Ply parsePlies(String movesText) {
     def firstPly = null as Ply
     def prevPly = null as Ply
     def currentVariation = ''
@@ -250,7 +289,7 @@ class Deserialiser {
           variationDepth -= 1
           inVariation = variationDepth != 0
           if (!inVariation) {
-            def variationPly = getPlies(currentVariation.trim())
+            def variationPly = parsePlies(currentVariation.trim())
             prevPly.variations << variationPly
             currentVariation = ''
           }
