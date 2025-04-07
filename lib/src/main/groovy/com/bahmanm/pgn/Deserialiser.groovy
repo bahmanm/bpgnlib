@@ -86,7 +86,7 @@ class Deserialiser {
       if (!tags && !result && !moveText) {
         return null
       } else {
-        return new Game(tags, startingMoveNumber, firstPly, result ?: '*')
+        return new Game(tags: tags, startingMoveNumber: startingMoveNumber, firstPly: firstPly, result: result ?: '*')
       }
     } catch (IOException e) {
       log.error("Error during deserialization: ${e.message}", e)
