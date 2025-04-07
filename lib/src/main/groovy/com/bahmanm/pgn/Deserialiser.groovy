@@ -12,20 +12,20 @@ import static java.io.StreamTokenizer.TT_WORD
 @Slf4j
 @CompileStatic
 class Deserialiser {
-  
+
   private final static Integer PAREN_OPEN = '('.codePointAt(0)
   private final static Integer PAREN_CLOSE = ')'.codePointAt(0)
   private final static Integer CURLY_OPEN = '{'.codePointAt(0)
   private final static Integer CURLY_CLOSE = '}'.codePointAt(0)
   private final static Integer BRACK_OPEN = '['.codePointAt(0)
-  private final static Integer BRACK_CLOSE = ']'.codePointAt(0)  
+  private final static Integer BRACK_CLOSE = ']'.codePointAt(0)
   private final static Integer QUOTE_DOUBLE = '"'.codePointAt(0)
   private final static Integer SIGIL = '$'.codePointAt(0)
   private final static Integer DOT = '.'.codePointAt(0)
-  
+
   private StreamTokenizer tokenizer
   private Integer currentToken = null
-  
+
   Deserialiser(String pgn) {
     if (!pgn || pgn.empty) {
       throw new IllegalArgumentException("PGN string cannot be null")
@@ -33,7 +33,7 @@ class Deserialiser {
     def reader = new StringReader(pgn)
     tokenizer = new StreamTokenizer(reader)
   }
-  
+
   private void configureTokeniser(Boolean isParseNumbers) {
     tokenizer.resetSyntax()
     tokenizer.wordChars('!'.codePointAt(0), '~'.codePointAt(0))
@@ -49,16 +49,16 @@ class Deserialiser {
     }
     tokenizer.eolIsSignificant(false)
   }
-  
+
   private Integer readNextToken() {
     currentToken = tokenizer.nextToken()
     return currentToken
   }
-  
+
   private Integer getCurrentToken() {
     return currentToken
   }
-  
+
   Game nextGame() {
     if (currentToken == TT_EOF) {
       return null
@@ -82,11 +82,14 @@ class Deserialiser {
       configureTokeniser(false)
       def moveText = readGameMovesText()
       def result = parseResult(moveText)
-      def firstPly = parsePlies(moveText) 
+      def startingSide = parseStartingSide(moveText)
+      def firstPly = parsePlies(moveText)
       if (!tags && !result && !moveText) {
         return null
       } else {
-        return new Game(tags: tags, startingMoveNumber: startingMoveNumber, firstPly: firstPly, result: result ?: '*')
+        return new Game(
+            tags: tags, startingMoveNumber: startingMoveNumber, 
+            startingSide: startingSide, firstPly: firstPly, result: result ?: '*')
       }
     } catch (IOException e) {
       log.error("Error during deserialization: ${e.message}", e)
@@ -120,11 +123,11 @@ class Deserialiser {
       }
     }
     return result
-  }  
+  }
 
   private Integer readStartingMoveNumber() {
     tokenizer.pushBack()
-    
+
     def result = -1
     while (readNextToken() != TT_EOF) {
       if (currentToken == TT_NUMBER) {
@@ -152,31 +155,35 @@ class Deserialiser {
       return null
     }
   }
-  
+
+  private Game.Side parseStartingSide(String moveText) {
+    return moveText.find(/[1-9]\d*\.+/)?.contains('..') ? Game.Side.BLACK : Game.Side.WHITE
+  }
+
   private void skipTokensUntilFirstMove() {
     def found = false
 
     while (!found && readNextToken() != TT_EOF) {
       if (currentToken == TT_NUMBER) {
-        found = true        
+        found = true
       } else if (currentToken == TT_WORD) { // TODO Unreachable
         if (tokenizer.sval =~ /^[1-9][0-9]*\..*$/) {
-          found = true          
+          found = true
         } else if (tokenizer.sval in ['1-0', '0-1', '1/2-1/2', '*']) {
           found = true
         }
       } else if (currentToken == BRACK_OPEN) {
         found = true
       }
-    }    
+    }
     if (found) {
       tokenizer.pushBack()
     }
   }
-  
+
   private String readGameMovesText() {
     skipTokensUntilFirstMove()
-    
+
     def result = ''
     while (readNextToken() != TT_EOF) {
       if (currentToken == PAREN_OPEN) {
@@ -196,19 +203,19 @@ class Deserialiser {
       } else {
         result += "${Character.toString(currentToken)}"
       }
-      
+
       if (result =~ /(1-0|0-1|\*|1\/2-1\/2)\s*$/) {
         break
       }
     }
     return result.trim()
   }
-  
+
   private List<Map<String, String>> getIntermediateElements(String movesText) {
     if (movesText =~ /^\s*\(.+\)\s*$/) {
-      movesText = movesText.substring(1, movesText.size()-1)
+      movesText = movesText.substring(1, movesText.size() - 1)
     }
-    
+
     def result = [] as List<Map<String, String>>
     def parenCount = 0
     def currentMove = ''
@@ -220,7 +227,7 @@ class Deserialiser {
     for (def s : movesText) {
       if (PAREN_OPEN == s) {
         parenCount += 1
-        if (! currentMove.empty) {
+        if (!currentMove.empty) {
           result << [move: currentMove.trim()]
           currentMove = ''
         }
@@ -237,7 +244,7 @@ class Deserialiser {
       } else if (inComment) {
         if (CURLY_CLOSE == s) {
           result[-1]['comment'] = currentComment.trim()
-          inComment = false          
+          inComment = false
           currentComment = ''
         } else {
           currentComment += s
@@ -262,13 +269,13 @@ class Deserialiser {
           }
           currentMove = ''
         }
-      } else if (DOT != s) {
+      } else {
         currentMove += s
       }
     }
     if (!currentMove.empty && !currentMove =~ /^\d*$/ && !currentMove =~ /^\*$/) {
       result << [move: currentMove.trim()]
-    }    
+    }
     return result
   }
 

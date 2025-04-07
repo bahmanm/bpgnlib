@@ -48,6 +48,7 @@ class DeserialiserSpec extends Specification {
     game.result == '*'
     game.firstPly == null
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test single move game'() {
@@ -77,6 +78,7 @@ class DeserialiserSpec extends Specification {
     game.firstPly.san == 'e4'
     game.firstPly.next == null
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test two move game'() {
@@ -108,6 +110,7 @@ class DeserialiserSpec extends Specification {
     game.firstPly.next.san == 'c5'
     game.firstPly.next.next == null
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test game with result'() {
@@ -132,6 +135,7 @@ class DeserialiserSpec extends Specification {
     game != null
     game.result == '1-0'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def "should parse draw result"() {
@@ -154,6 +158,7 @@ class DeserialiserSpec extends Specification {
 
     then:
     game.result == '1/2-1/2'
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test game with comments'() {
@@ -180,6 +185,7 @@ class DeserialiserSpec extends Specification {
     firstPly.commentAfter == 'This is a comment'
     firstPly.next.commentAfter == 'Another comment'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test game with variations'() {
@@ -208,6 +214,7 @@ class DeserialiserSpec extends Specification {
     firstPly.variations[0].san == 'd4'
     firstPly.next.san == 'c5'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test game with nested variations'() {
@@ -237,6 +244,7 @@ class DeserialiserSpec extends Specification {
     firstPly.variations[0].variations.size() == 1
     firstPly.variations[0].variations[0].san == 'c4'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test game with nag'() {
@@ -265,6 +273,7 @@ class DeserialiserSpec extends Specification {
     firstPly.next.san == 'c5'
     firstPly.next.nag == '$2'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test real game'() {
@@ -296,6 +305,7 @@ class DeserialiserSpec extends Specification {
     game.firstPly.san == 'd4'
     game.firstPly.next.san == 'Nf6'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test game with missing tags'() {
@@ -311,6 +321,7 @@ class DeserialiserSpec extends Specification {
     game.tags.size() == 0
     game.firstPly.san == 'e4'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test game with extra whitespace'() {
@@ -331,6 +342,7 @@ class DeserialiserSpec extends Specification {
     game.tags.size() == 2
     game.firstPly.san == 'e4'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test game with only result'() {
@@ -346,6 +358,7 @@ class DeserialiserSpec extends Specification {
     game.result == '1-0'
     game.firstPly == null
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test game with multiple variations'() {
@@ -366,6 +379,7 @@ class DeserialiserSpec extends Specification {
     firstPly.variations[0].san == 'd4'
     firstPly.variations[1].san == 'c4'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE    
   }
 
   def 'test game with variations and comments'() {
@@ -388,6 +402,7 @@ class DeserialiserSpec extends Specification {
     firstPly.next.san == 'c5'
     firstPly.next.commentAfter == 'Sicilian'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE    
   }
 
   def 'test game with long NAG'() {
@@ -413,6 +428,7 @@ class DeserialiserSpec extends Specification {
     game.firstPly.nag == '$1234'
     game.firstPly.san == 'e4'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test game with move number with three dots'() {
@@ -438,6 +454,7 @@ class DeserialiserSpec extends Specification {
     game.firstPly.san == 'c5'
     game.firstPly.next.san == 'Nf3'
     game.startingMoveNumber == 1
+    game.startingSide == Game.Side.BLACK
   }
 
   def 'test game starting from ply 2, white moves first'() {
@@ -464,6 +481,7 @@ class DeserialiserSpec extends Specification {
     game.firstPly.san == 'e4'
     game.firstPly.next.san == 'c5'
     game.startingMoveNumber == 2
+    game.startingSide == Game.Side.WHITE
   }
 
   def 'test game starting from ply 2, black moves first'() {
@@ -490,6 +508,7 @@ class DeserialiserSpec extends Specification {
     game.firstPly.san == 'c5'
     game.firstPly.next.san == 'e4'
     game.startingMoveNumber == 2
+    game.startingSide == Game.Side.BLACK
   }
 
   def 'test multi-game PGN'() {
@@ -541,7 +560,9 @@ class DeserialiserSpec extends Specification {
     games.size() == 2
     games[0].result == '1/2-1/2'
     games[0].tags.find { it.key == 'PlyCount' }.value == '47'
+    games[0].startingSide == Game.Side.WHITE
     games[1].result == '1-0'
     games[1].tags.find { it.key == 'PlyCount' }.value == '25'
+    games[1].startingSide == Game.Side.WHITE
   }
 }
