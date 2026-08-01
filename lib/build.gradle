@@ -9,8 +9,8 @@ repositories {
 }
 
 dependencies {
-  implementation 'org.apache.groovy:groovy-all:4.0.31'
-  implementation 'org.slf4j:slf4j-api:2.0.17'
+  implementation 'org.apache.groovy:groovy-all:4.0.33'
+  implementation 'org.slf4j:slf4j-api:2.0.18'
 }
 
 testing {
